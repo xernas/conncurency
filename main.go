@@ -13,8 +13,6 @@ func main() {
 	defer cancelMain()
 	defer cancelMid()
 
-	mtx := &sync.Mutex{}
-
 	sensorWG := &sync.WaitGroup{}
 
 	readerWG := &sync.WaitGroup{}
@@ -26,9 +24,9 @@ func main() {
 	seismCh := make(chan string)
 
 	readerWG.Add(3)
-	go reader.Reader(dumpCh, mtx, readerWG, middleContext)
-	go reader.Reader(pressCh, mtx, readerWG, middleContext)
-	go reader.Reader(seismCh, mtx, readerWG, middleContext)
+	go reader.Reader(dumpCh, readerWG, middleContext)
+	go reader.Reader(pressCh, readerWG, middleContext)
+	go reader.Reader(seismCh, readerWG, middleContext)
 
 	for weather := range weatherCh {
 		sensorWG.Add(3)
