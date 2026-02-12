@@ -10,38 +10,38 @@ import (
 func main() {
 	mainContext, cancelMain := context.WithCancel(context.Background())
 	middleContext, cancelMid := context.WithCancel(mainContext)
+	defer cancelMain()
+	defer cancelMid()
 
-	defer func() {
-		cancelMain()
-		cancelMid()
-	}()
-
-	wg := &sync.WaitGroup{}
 	mtx := &sync.Mutex{}
 
-	weatherCh := geo.WeatherGenerator(mainContext, 20)
+	sensorWG := &sync.WaitGroup{}
+
+	readerWG := &sync.WaitGroup{}
+
+	weatherCh := geo.WeatherGenerator(mainContext, 20, sensorWG)
 
 	dumpCh := make(chan string)
 	pressCh := make(chan string)
 	seismCh := make(chan string)
 
-	wg.Add(1)
-	go reader.Reader(dumpCh, mtx, wg, middleContext)
-	wg.Add(1)
-	go reader.Reader(pressCh, mtx, wg, middleContext)
-	wg.Add(1)
-	go reader.Reader(seismCh, mtx, wg, middleContext)
+	readerWG.Add(3)
+	go reader.Reader(dumpCh, mtx, readerWG, middleContext)
+	go reader.Reader(pressCh, mtx, readerWG, middleContext)
+	go reader.Reader(seismCh, mtx, readerWG, middleContext)
 
 	for weather := range weatherCh {
-		wg.Add(1)
-		go geo.DumpSensor(weather, dumpCh, wg, middleContext)
-		wg.Add(1)
-		go geo.PressSensor(weather, pressCh, wg, middleContext)
-		wg.Add(1)
-		go geo.SeismSensor(weather, seismCh, wg, middleContext)
+		sensorWG.Add(3)
+		go geo.DumpSensor(weather, dumpCh, sensorWG, middleContext)
+		go geo.PressSensor(weather, pressCh, sensorWG, middleContext)
+		go geo.SeismSensor(weather, seismCh, sensorWG, middleContext)
 	}
 
-	go func() {
-		wg.Wait()
-	}()
+	sensorWG.Wait()
+
+	close(dumpCh)
+	close(pressCh)
+	close(seismCh)
+
+	readerWG.Wait()
 }
