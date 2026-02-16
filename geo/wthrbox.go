@@ -33,9 +33,8 @@ func NewWeather(
 
 func WeatherGenerator(
 	ctx context.Context,
-	dayNum int) <-chan weather.Weather {
+	dayNum int, wg *sync.WaitGroup) <-chan weather.Weather {
 	trPoint := make(chan weather.Weather)
-	wg := &sync.WaitGroup{}
 
 	for i := 1; i <= dayNum; i++ {
 		wg.Add(1)

@@ -3,43 +3,56 @@ package main
 import (
 	"context"
 	"getback/geo"
-	"getback/reader"
 	"sync"
 )
 
 func main() {
 	mainContext, cancelMain := context.WithCancel(context.Background())
-	middleContext, cancelMid := context.WithCancel(mainContext)
+	midContext, cancelMid := context.WithCancel(mainContext)
+
 	defer cancelMain()
 	defer cancelMid()
 
-	sensorWG := &sync.WaitGroup{}
+	sWG := &sync.WaitGroup{}
+	rWG := &sync.WaitGroup{}
 
-	readerWG := &sync.WaitGroup{}
+	weatherCh := geo.WeatherGenerator(midContext, 20, sWG)
 
-	weatherCh := geo.WeatherGenerator(mainContext, 20, sensorWG)
+	templateCh := make(chan string, 30)
+	dumpCh := make(chan string, 30)
+	pressCh := make(chan string, 30)
+	seismCh := make(chan string, 30)
 
-	dumpCh := make(chan string)
-	pressCh := make(chan string)
-	seismCh := make(chan string)
+	template := geo.Msg{
+		Ch:  templateCh,
+		Ctx: midContext}
 
-	readerWG.Add(3)
-	go reader.Reader(dumpCh, readerWG, middleContext)
-	go reader.Reader(pressCh, readerWG, middleContext)
-	go reader.Reader(seismCh, readerWG, middleContext)
+	dump := template
+	dump.Ch = dumpCh
+
+	press := template
+	press.Ch = pressCh
+
+	seism := template
+	seism.Ch = seismCh
+
+	rWG.Add(3)
+	go dump.Reader(rWG)
+	go press.Reader(rWG)
+	go seism.Reader(rWG)
 
 	for weather := range weatherCh {
-		sensorWG.Add(3)
-		go geo.DumpSensor(weather, dumpCh, sensorWG, middleContext)
-		go geo.PressSensor(weather, pressCh, sensorWG, middleContext)
-		go geo.SeismSensor(weather, seismCh, sensorWG, middleContext)
+		sWG.Add(3)
+		go dump.Sensor(1, weather, sWG)
+		go press.Sensor(2, weather, sWG)
+		go seism.Sensor(3, weather, sWG)
 	}
 
-	sensorWG.Wait()
+	sWG.Wait()
 
 	close(dumpCh)
 	close(pressCh)
 	close(seismCh)
 
-	readerWG.Wait()
+	rWG.Wait()
 }
