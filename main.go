@@ -6,6 +6,10 @@ import (
 	"sync"
 )
 
+type Sens interface {
+	Reader(wg *sync.WaitGroup)
+}
+
 func main() {
 	mainContext, cancelMain := context.WithCancel(context.Background())
 	midContext, cancelMid := context.WithCancel(mainContext)
@@ -36,10 +40,13 @@ func main() {
 	seism := template
 	seism.Ch = seismCh
 
-	rWG.Add(3)
-	go dump.Reader(rWG)
-	go press.Reader(rWG)
-	go seism.Reader(rWG)
+	sensors := make([]geo.Msg, 0, 3)
+	sensors = append(sensors, dump, press, seism)
+
+	for _, sensor := range sensors {
+		rWG.Add(1)
+		go sensor.Reader(rWG)
+	}
 
 	for weather := range weatherCh {
 		sWG.Add(3)
